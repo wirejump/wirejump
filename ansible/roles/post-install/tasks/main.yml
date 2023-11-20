@@ -1,0 +1,53 @@
+
+- name: Register upstream updater script with cron (every hour)
+  cron:
+    name: "WireJump: update upstream VPN servers"
+    minute: "5"
+    hour: "*"
+    job: "{{ wirejump.basedir }}/scripts/servers.sh"
+
+- name: Register peer DNS script with cron (every minute)
+  cron:
+    name: "WireJump: update peers DNS"
+    minute: "*"
+    hour: "*"
+    job: "{{ wirejump.basedir }}/scripts/peers.sh"
+
+- name: Enable separate log for cron [1/2]
+  lineinfile:
+    path: /etc/rsyslog.d/50-default.conf
+    regexp: '^\*\.\*;auth,authpriv\.none\s*\-/var/log/syslog'
+    line: '*.*;auth,authpriv.none,cron.none                -/var/log/syslog'
+    state: present
+
+- name: Enable separate log for cron [2/2]
+  lineinfile:
+    path: /etc/rsyslog.d/50-default.conf
+    regexp: '^#cron'
+    line: 'cron.*                          /var/log/cron.log'
+    state: present
+
+- name: Reboot system
+  reboot:
+
+- name: Ensure connection manager is running
+  shell: systemctl status wirejump
+
+- name: Ensure downstream is up and running
+  shell: ip a | grep -q downstream
+
+- name: Print info banner
+  pause:
+    seconds: 1
+    prompt: |
+      
+      Great news!
+      WireJump Server has been successfully installed.
+      Use following info for your client configuration:
+
+      -------------------------------------------------------
+      PublicKey: {{ wirejump_downstream_private_key.stdout }}
+      Address:   {{ ansible_default_ipv4.address|default(ansible_all_ipv4_addresses[0]) }}
+      Port:      {{ wirejump.interfaces.downstream.port }}
+      -------------------------------------------------------
+

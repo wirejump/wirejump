@@ -1,0 +1,196 @@
+- name: Enable IPv4 forwarding via sysctl
+  copy:
+    dest: "/etc/sysctl.d/99-ipforward.conf"
+    content: |
+      net.ipv4.ip_forward=1
+
+- name: Disable IPv6 via sysctl
+  copy:
+    dest: "/etc/sysctl.d/99-disable-ipv6.conf"
+    content: |
+      net.ipv6.conf.all.disable_ipv6=1
+      net.ipv6.conf.default.disable_ipv6=1
+      net.ipv6.conf.lo.disable_ipv6=1
+
+- name: Create custom routing table for WireGuard
+  lineinfile:
+    path: /etc/iproute2/rt_tables
+    line: |
+      # separate routing table for {{ wirejump.interfaces.upstream.name }} interface
+      # use hardcoded table ID for now
+      42	wirejump_table
+    state: present
+    regexp: '^42\s*wirejump_table'
+
+- name: "Create WireJump user group"
+  group:
+    state: present
+    name: "{{ wirejump.group }}"
+
+- name: "Create WireJump user"
+  user:
+    name: "{{ wirejump.user }}"
+    create_home: no
+    shell: /sbin/nologin
+    append: yes
+    comment: WireJump connection manager user
+    state: present
+    groups: "{{ wirejump.group }},sudo"
+
+- name: "Remove sudo password for WireJump user"
+  lineinfile:
+    dest: /etc/sudoers
+    regexp: "^{{ wirejump.user }}"
+    line: "{{ wirejump.user }}\t\t\tALL=(ALL)\t\t\tNOPASSWD: ALL"
+    validate: "visudo -cf %s"
+
+- name: Create WireJump folders
+  file:
+    path: "{{ item }}"
+    state: directory
+    recurse: yes
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0755
+  loop:
+    - "{{ wirejump.basedir }}/scripts"
+    - "{{ wirejump.basedir }}/config"
+    - "{{ wirejump.basedir }}/bin"
+
+- name: Copy system scripts
+  template:
+    src: "templates/scripts/{{ item | basename }}"
+    dest: "{{ wirejump.basedir }}/scripts/{{ item | basename }}"
+    force: yes
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0755
+  with_fileglob: "templates/scripts/*"
+
+- name: Create WireGuard private key for downstream interface
+  shell: "wg genkey"
+  register: wirejump_downstream_private_key
+
+- name: Create WireGuard public key for downstream interface
+  shell: "echo {{ wirejump_downstream_private_key.stdout | trim }} | wg pubkey"
+  register: wirejump_downstream_public_key
+
+- name: Setup WireGuard downstream interface
+  copy:
+    dest: "{{ wirejump.basedir }}/config/downstream.conf"
+    content: |
+      [Interface]
+      Address = {{ wirejump_downstream_cidr }}
+      ListenPort = {{ wirejump.interfaces.downstream.port }}
+      PrivateKey = {{ wirejump_downstream_private_key.stdout | trim }}
+      PostUp = {{ wirejump.basedir }}/scripts/downstream.sh "%i" up
+      PostDown = {{ wirejump.basedir }}/scripts/downstream.sh "%i" down
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0600
+
+- name: Setup initial WireGuard upstream interface
+  file:
+    dest: "{{ wirejump.basedir }}/config/upstream.conf"
+    state: touch
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0600
+
+- name: Create initial WireGuard upstream gateway file
+  file:
+    dest: "{{ wirejump.basedir }}/config/upstream_gateway"
+    state: touch
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0600
+
+- name: Create /etc/wireguard directory (will be used by wg-quick)
+  file:
+    path: /etc/wireguard
+    state: directory
+    mode: 0650
+
+- name: Setup /etc/wireguard downstream interface config symlink
+  file:
+    src: "{{ wirejump.basedir }}/config/downstream.conf"
+    path: "/etc/wireguard/{{ wirejump.interfaces.downstream.name }}.conf"
+    state: link
+
+- name: Setup /etc/wireguard upstream interface config symlink
+  file:
+    src: "{{ wirejump.basedir }}/config/upstream.conf"
+    path: "/etc/wireguard/{{ wirejump.interfaces.upstream.name }}.conf"
+    state: link
+
+- name: Register downstream WireGuard interface with systemd
+  systemd:
+    name: "wg-quick@{{ wirejump.interfaces.downstream.name }}.service"
+    daemon_reload: yes
+    enabled: yes
+
+- name: Copy wirejump daemon to remote
+  copy:
+    src: "{{ wirejump.binpath }}/wirejumpd"
+    dest: "{{ wirejump.basedir }}/bin/wirejumpd"
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0755
+
+- name: Install wirejumpd configuration to remote
+  template:
+    src: "templates/configs/wirejumpd.conf"
+    dest: "{{ wirejump.basedir }}/config/wirejumpd.conf"
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0600
+
+- name: Copy wirejump CLI to remote
+  copy:
+    src: "{{ wirejump.binpath }}/wjcli"
+    dest: "{{ wirejump.basedir }}/bin/wjcli"
+    owner: "{{ wirejump.user }}"
+    group: "{{ wirejump.group }}"
+    mode: 0755
+
+- name: Install wirejumpd systemd unit
+  template:
+    src: "templates/units/wirejump.service"
+    dest: /etc/systemd/system/wirejump.service
+
+- name: Install wirejump profile.d file
+  template:
+    src: "templates/configs/profile"
+    dest: /etc/profile.d/wirejump.sh
+
+- name: Register connection manager systemd unit
+  systemd:
+    name: wirejump
+    daemon_reload: yes
+    enabled: yes
+
+- name: Create WireJump admin user
+  user:
+    name: "{{ wirejump.admin }}"
+    create_home: yes
+    shell: "{{ wirejump.basedir }}/scripts/shell.sh"
+    append: yes
+    comment: "WireJump remote CLI user"
+    state: present
+    groups: "{{ wirejump.group }}"
+
+- name: Restrict remote shell for WireJump admin user
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    validate: "sshd -t -f %s"
+    content: |
+    Match User {{ wirejump.admin }}
+      ForceCommand {{ wirejump.basedir }}/scripts/shell.sh
+
+- name: Create .ssh folder for WireJump admin user
+  file:
+    path: "/home/{{ wirejump.admin }}/.ssh"
+    state: directory
+    owner: "{{ wirejump.admin }}"
+    group: "{{ wirejump.admin }}"
+    chmod: 0700

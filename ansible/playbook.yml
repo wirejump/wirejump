@@ -1,0 +1,40 @@
+---
+- name: WireJump (WireGuard-powered SSH JumpHost server)
+  hosts: all
+  become: true
+  vars:
+    # apt mirror to use
+    apt_country: nl
+
+    wirejump:
+      admin: manager
+      user: wirejump
+      group: wirejump
+      project_url: "https://www.wirejump.net"
+      basedir: /opt/wirejump
+
+      # interface configuration
+      interfaces:
+
+        # this interface will be connected to a VPN provider
+        upstream: 
+          name: upstream
+
+        # this interface will be used by clients
+        downstream:
+          name: downstream
+          mtu: 1420
+          port: 51820
+          address: 172.16.1.1
+          netmask: 255.255.255.0
+      
+      # wirejump binaries location
+      binpath: "{{ playbook_dir }}/../build"
+
+  roles:
+    - base
+    - unbound
+    - wireguard
+    - firewall
+    - post-install
+

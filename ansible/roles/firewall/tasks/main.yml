@@ -1,0 +1,30 @@
+- name: Create sshguard config
+  template:
+    src: "templates/configs/sshguard.conf"
+    dest: "/etc/sshguard/sshguard.conf"
+
+- name: Enable autostart for sshguard
+  systemd:
+    name: sshguard
+    enabled: yes
+
+- name: Add downstream network to the sshguard whitelist
+  lineinfile:
+    dest: /etc/sshguard/whitelist
+    line: "{{ wirejump_downstream_cidr }}"
+
+- name: Copy firewall script
+  template:
+    src: "templates/scripts/firewall.sh"
+    dest: "{{ wirejump.basedir }}/scripts/firewall.sh"
+    mode: 0750
+
+- name: Install firewall systemd unit
+  template:
+    src: "templates/units/firewall.service"
+    dest: /etc/systemd/system/firewall.service
+
+- name: Enable autostart for firewall
+  systemd:
+    name: firewall
+    enabled: yes

@@ -1,0 +1,64 @@
+- name: Checking if connection manager is present
+  become: false
+  local_action: stat path="{{ wirejump.binpath }}/wirejumpd"
+  register: wirejump_present
+
+- name: Ensure that connection manager is present
+  fail:
+    msg: "Connection manager binary is not available, please compile it yourself or fetch a binary from {{ wirejump.project_url }}"
+  when: not wirejump_present.stat.exists
+
+- name: Setting downstream address/netmask in CIDR format
+  set_fact:
+    wirejump_downstream_cidr: "{{ (wirejump.interfaces.downstream.address + '/' + wirejump.interfaces.downstream.netmask) | ansible.utils.ipaddr('host/prefix') }}"
+
+- name: Switch to closer Ubuntu mirror
+  replace:
+    path: /etc/apt/sources.list
+    regexp: 'us.archive'
+    replace: '{{ apt_country }}.archive'
+
+- name: Install aptitude
+  apt:
+    force_apt_get: yes
+    update_cache: yes
+    pkg:
+    - aptitude
+
+- name: Check if kernel needs upgrading
+  shell: "aptitude search -q -F '%p-%v' --disable-columns '~U' | grep linux-image -q"
+  register: new_kernel_available
+  failed_when: (new_kernel_available.rc not in [0, 1])
+
+- name: Update existing packages
+  apt:
+    upgrade: dist
+    update_cache: yes
+
+# don't reboot if there are no kernel upgrades available
+- name: Reboot to load new kernel
+  reboot:
+  when:
+    new_kernel_available.rc == 0
+
+- name: Install required packages
+  apt:
+    force_apt_get: yes
+    update_cache: yes
+    pkg:
+    - ifupdown
+    - iptables-persistent
+    - linux-headers-{{ ansible_kernel }}
+    - fping
+    - nload
+    - openssl
+    - traceroute
+    - wireguard
+    - sshguard
+    - qrencode
+    - mtr-tiny
+    - unbound
+    - ipcalc
+    - nmap
+    - mc
+    - jq

@@ -1,0 +1,47 @@
+- name: Setup unbound config directory
+  file:
+    path: "/etc/unbound/unbound.conf.d"
+    state: directory
+
+- name: Setup unbound config files [1/2]
+  copy:
+    dest: "/etc/unbound/unbound.conf"
+    content: |
+      # Unbound configuration file for Debian.
+      #
+      # See the unbound.conf(5) man page.
+      #
+      # See /usr/share/doc/unbound/examples/unbound.conf for a commented
+      # reference config file.
+      #
+      # The following line includes additional configuration files from the
+      # /etc/unbound/unbound.conf.d directory.
+      include-toplevel: "/etc/unbound/unbound.conf.d/*.conf"
+    owner: unbound
+    group: unbound
+
+- name: Setup unbound config files [2/2]
+  template:
+    src: "templates/configs/unbound-main.conf"
+    dest: "/etc/unbound/unbound.conf.d/main.conf"
+
+- name: Ensure unbound remote control is disabled
+  file:
+    dest: /etc/unbound/unbound.conf.d/remote-control.conf
+    state: absent
+
+- name: Adjust unbound config permissions [1/2]
+  file:
+    dest: /etc/unbound/unbound.conf.d
+    recurse: yes
+    owner: unbound
+    group: unbound
+
+# ugly but works
+- name: Adjust unbound config permissions [2/2]
+  shell: find /etc/unbound/unbound.conf.d -type f -exec chmod 0644 {} \;
+
+- name: Enable autostart for unbound service
+  systemd:
+    name: unbound
+    enabled: yes

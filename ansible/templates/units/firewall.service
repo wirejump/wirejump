@@ -1,0 +1,17 @@
+[Unit]
+Description=WireJump-specific iptables firewall
+Documentation={{ wirejump.project_url }}
+ConditionFileIsExecutable={{ wirejump.basedir }}/scripts/firewall.sh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ wirejump.basedir }}/scripts/firewall.sh start
+ExecStop={{ wirejump.basedir }}/scripts/firewall.sh stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=wg-quick.target
+WantedBy=sshguard.service
+WantedBy=unbound.service

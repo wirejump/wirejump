@@ -1,0 +1,16 @@
+[Unit]
+Description=WireJump connection manager
+Documentation={{ wirejump.project_url }}
+ConditionFileIsExecutable={{ wirejump.basedir }}/bin/wirejumpd
+After=network.service firewall.service wg-quick@{{ wirejump.interfaces.downstream.name }}.service
+
+[Service]
+Type=simple
+Restart=always      
+User={{ wirejump.user }}
+Group={{ wirejump.group }}
+RuntimeDirectory=wirejumpd
+ExecStart={{ wirejump.basedir }}/bin/wirejumpd --config {{ wirejump.basedir }}/config/wirejumpd.conf
+
+[Install]
+WantedBy=multi-user.target

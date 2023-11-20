@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Expand $PATH to include the wirejump binaries directory
+wirejump_bin_path="{{ wirejump.basedir }}/bin"
+
+if [ -n "${PATH##*${wirejump_bin_path}}" ] && [ -n "${PATH##*${wirejump_bin_path}:*}" ]; then
+    export PATH="$PATH:${wirejump_bin_path}"
+fi
