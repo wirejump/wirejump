@@ -29,7 +29,7 @@ COPY --from=git-stage /version-file /
 
 COPY wirejump .
 RUN COMMIT="$(cat /commit-file)" VERSION="$(cat /version-file)" OUTPUT_DIR=/build GOOS=linux make
-RUN ls /build/
+RUN cd /build && sha256sum wirejumpd wjcli > SHA256SUMS
 
 FROM scratch AS export-stage
 COPY --from=build-stage /build /

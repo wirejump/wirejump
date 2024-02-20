@@ -11,6 +11,7 @@
       user: wirejump
       group: wirejump
       project_url: "https://www.wirejump.net"
+      github_path: "wirejump/wirejump"
       basedir: /opt/wirejump
 
       # interface configuration
@@ -30,6 +31,9 @@
       
       # wirejump binaries location
       binpath: "{{ playbook_dir }}/../build"
+      binaries:
+      - wjcli
+      - wirejumpd
 
   roles:
     - base
@@ -37,4 +41,3 @@
     - wireguard
     - firewall
     - post-install
-

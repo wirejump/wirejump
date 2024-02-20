@@ -129,13 +129,52 @@
     daemon_reload: yes
     enabled: yes
 
-- name: Copy wirejump daemon to remote
+- name: Checking if WireJump binaries are present
+  become: false
+  local_action: stat path="{{ wirejump.binpath }}/{{ item }}"
+  register: wirejump_present
+  loop: "{{ wirejump.binaries }}"
+
+- name: Create WireJump local binary directory
+  delegate_to: localhost
+  become: false
+  file:
+    path: "{{ wirejump.binpath }}"
+    state: directory
+  when: not (wirejump_present.results | map(attribute='stat.exists')) is all
+
+- name: Determine latest GitHub release
+  delegate_to: localhost
+  become: false
+  uri:
+    url: "https://api.github.com/repos/{{ wirejump.github_path }}/releases/latest"
+    body_format: json
+  register: github_release
+  when: not (wirejump_present.results | map(attribute='stat.exists')) is all
+
+- name: Format latest GitHub release version
+  set_fact:
+    wirejump_version: "{{ github_release.json.tag_name }}"
+  when: not (wirejump_present.results | map(attribute='stat.exists')) is all
+
+- name: "Download WireJump release from GitHub and verify SHA256 checksum"
+  delegate_to: localhost
+  become: false
+  get_url:
+    url: "https://github.com/{{ wirejump.github_path }}/releases/download/{{ wirejump_version }}/{{ item }}"
+    dest: "{{ wirejump.binpath }}/{{ item }}"
+    checksum: "sha256:https://github.com/{{ wirejump.github_path }}/releases/download/{{ wirejump_version }}/SHA256SUMS"
+  loop: "{{ wirejump.binaries }}"
+  when: not (wirejump_present.results | map(attribute='stat.exists')) is all
+
+- name: Install wirejump binaries to remote
   copy:
-    src: "{{ wirejump.binpath }}/wirejumpd"
-    dest: "{{ wirejump.basedir }}/bin/wirejumpd"
+    src: "{{ wirejump.binpath }}/{{ item }}"
+    dest: "{{ wirejump.basedir }}/bin/{{ item }}"
     owner: "{{ wirejump.user }}"
     group: "{{ wirejump.group }}"
     mode: 0755
+  loop: "{{ wirejump.binaries }}"
 
 - name: Install wirejumpd configuration to remote
   template:
@@ -144,14 +183,6 @@
     owner: "{{ wirejump.user }}"
     group: "{{ wirejump.group }}"
     mode: 0600
-
-- name: Copy wirejump CLI to remote
-  copy:
-    src: "{{ wirejump.binpath }}/wjcli"
-    dest: "{{ wirejump.basedir }}/bin/wjcli"
-    owner: "{{ wirejump.user }}"
-    group: "{{ wirejump.group }}"
-    mode: 0755
 
 - name: Install wirejumpd systemd unit
   template:
@@ -183,8 +214,8 @@
   lineinfile:
     dest: /etc/ssh/sshd_config
     validate: "sshd -t -f %s"
-    content: |
-    Match User {{ wirejump.admin }}
+    line: |
+      Match User {{ wirejump.admin }}
       ForceCommand {{ wirejump.basedir }}/scripts/shell.sh
 
 - name: Create .ssh folder for WireJump admin user
@@ -193,4 +224,4 @@
     state: directory
     owner: "{{ wirejump.admin }}"
     group: "{{ wirejump.admin }}"
-    chmod: 0700
+    mode: 0700

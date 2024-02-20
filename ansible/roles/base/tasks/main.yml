@@ -1,13 +1,3 @@
-- name: Checking if connection manager is present
-  become: false
-  local_action: stat path="{{ wirejump.binpath }}/wirejumpd"
-  register: wirejump_present
-
-- name: Ensure that connection manager is present
-  fail:
-    msg: "Connection manager binary is not available, please compile it yourself or fetch a binary from {{ wirejump.project_url }}"
-  when: not wirejump_present.stat.exists
-
 - name: Setting downstream address/netmask in CIDR format
   set_fact:
     wirejump_downstream_cidr: "{{ (wirejump.interfaces.downstream.address + '/' + wirejump.interfaces.downstream.netmask) | ansible.utils.ipaddr('host/prefix') }}"

@@ -20,12 +20,13 @@ There's no hard RAM requirement for the server, but 1GB is probably more than en
 cd <repo folder> && docker build --output build .
 ```
 
-Ansible will check for binaries in `build` folder before proceeding and will grab latest GitHub available release automatically if the folder is empty.
+Ansible will check for binaries in `build` folder before proceeding and will grab latest GitHub available release automatically if the folder is empty or does not exist.
 
 4. Run Ansible targeting your server machine:
 
 ```
-$ ansible-galaxy collection install ansible.utils community.crypto
+$ pip install ansible netaddr
+$ ansible-galaxy collection install ansible.utils community.crypto community.general
 $ ansible-playbook -i user@your.server.address, ansible/playbook.yml
 ```
 
