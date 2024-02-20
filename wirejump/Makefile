@@ -24,7 +24,7 @@ endif
 
 ifneq ($(VERSION), unversioned)
 	ACTUAL = $(VERSION)
-	VERSION = v.$(ACTUAL)
+	VERSION := $(ACTUAL)
 endif
 
 # get build date

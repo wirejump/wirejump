@@ -1,0 +1,25 @@
+name: WireJump CI release
+on:
+  push:
+    tags:
+      "v*.*.*"
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Extract version
+      shell: bash
+      run: |
+        echo "$(git rev-parse --short "$GITHUB_SHA")" >> "commit-file"
+        echo "$(echo ${GITHUB_HEAD_REF:-${GITHUB_REF#refs/tags/}})" >> "version-file"
+    - name: Build the Docker image
+      run: docker build --file Dockerfile --build-arg EXTCOMMIT=$(cat commit-file) --build-arg EXTVERSION=$(cat version-file) --output build .
+    - name: Upload release artifact
+      uses: softprops/action-gh-release@v1
+      with:
+        files: build/*

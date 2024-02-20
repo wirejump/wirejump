@@ -1,0 +1,31 @@
+# generic builder to run on every push
+name: WireJump CI build
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.create-matrix.outputs.matrix }}
+    steps:
+    - uses: actions/checkout@v4
+    - id: create-matrix
+      run: echo "matrix=$(ls -d wirejump/cmd/* | jq -R -s -c 'split("\n")[:-1]')" >> $GITHUB_OUTPUT
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        path: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version: 'stable'
+    - name: Build
+      run: cd ${{ matrix.path }} && go get . && go build -v . && go test
